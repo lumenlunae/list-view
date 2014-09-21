@@ -102,6 +102,7 @@ export default Ember.Mixin.create({
   classNameBindings: ['_isGrid:ember-list-view-grid:ember-list-view-list'],
   domManager: domManager,
   scrollTop: 0,
+  scrollLeft: 0,
   bottomPadding: 0, // TODO: maybe this can go away
   _lastEndingIndex: 0,
   paddingCount: 1,
@@ -221,10 +222,10 @@ export default Ember.Mixin.create({
     @private
     @method _scrollContentTo
   */
-  _scrollContentTo: function(y) {
+  _scrollContentTo: function(x, y) {
     var startingIndex, endingIndex,
         contentIndex, visibleEndingIndex, maxContentIndex,
-        contentIndexEnd, contentLength, scrollTop, content;
+        contentIndexEnd, contentLength, scrollTop, scrollLeft, content;
 
     if (x === undefined) {
       x = get(this, 'scrollLeft');
@@ -707,7 +708,7 @@ export default Ember.Mixin.create({
     }
 
     var viewsNeededForViewport = this._numChildViewsForViewport();
-    var paddingCount = (1 * columnCount);
+    var paddingCount = (1 * totalColumnCount);
     var largestStartingIndex = max(contentLength - viewsNeededForViewport, 0);
 
     return min(calculatedStartingIndex, largestStartingIndex);
