@@ -226,16 +226,26 @@ export default Ember.Mixin.create({
         contentIndex, visibleEndingIndex, maxContentIndex,
         contentIndexEnd, contentLength, scrollTop, content;
 
-    scrollTop = max(0, y);
+    if (x === undefined) {
+      x = get(this, 'scrollLeft');
+    }
+    if (y === undefined) {
+      y = get(this, 'scrollTop');
+    }
 
-    if (this.scrollTop === scrollTop) {
+    scrollTop = max(0, y);
+    scrollLeft = max(0, x);
+
+    if (this.scrollTop === scrollTop && this.scrollLeft === scrollLeft) {
       return;
     }
 
     // allow a visual overscroll, but don't scroll the content. As we are doing needless
     // recycyling, and adding unexpected nodes to the DOM.
-    var maxScrollTop = max(0, get(this, 'totalHeight') - get(this, 'height'));
+    var maxScrollTop = get(this, 'maxScrollTop');
+    var maxScrollLeft = get(this, 'maxScrollLeft');
     scrollTop = min(scrollTop, maxScrollTop);
+    scrollLeft = min(scrollLeft, maxScrollLeft);
 
     content = get(this, 'content');
     contentLength = get(content, 'length');
@@ -243,11 +253,16 @@ export default Ember.Mixin.create({
 
     Ember.instrument('view._scrollContentTo', {
       scrollTop: scrollTop,
+      scrollLeft: scrollLeft,
       content: content,
       startingIndex: startingIndex,
       endingIndex: min(max(contentLength - 1, 0), startingIndex + this._numChildViewsForViewport())
     }, function () {
+      var triggerY = (this.scrollTop !== scrollTop);
+      var triggerX = (this.scrollLeft !== scrollLeft);
+
       this.scrollTop = scrollTop;
+      this.scrollLeft = scrollLeft;
 
       maxContentIndex = max(contentLength - 1, 0);
 
@@ -259,7 +274,12 @@ export default Ember.Mixin.create({
       if (startingIndex === this._lastStartingIndex &&
           endingIndex === this._lastEndingIndex) {
 
-        this.trigger('scrollYChanged', y);
+        if (triggerY) {
+          this.trigger('scrollYChanged', y);
+        } 
+        if (triggerX) {
+          this.trigger('scrollXChanged', x);
+        }
         return;
       } else {
 
@@ -268,7 +288,12 @@ export default Ember.Mixin.create({
 
           this._lastStartingIndex = startingIndex;
           this._lastEndingIndex = endingIndex;
-          this.trigger('scrollYChanged', y);
+          if (triggerY) {
+            this.trigger('scrollYChanged', y);
+          } 
+          if (triggerX) {
+            this.trigger('scrollXChanged', x);
+          }
         });
       }
     }, this);
@@ -280,6 +305,7 @@ export default Ember.Mixin.create({
 
     Computes the height for a `Ember.ListView` scrollable container div.
     You must specify `rowHeight` parameter for the height to be computed properly.
+    Either this property or `totalWidth` must be static.
 
     @property {Ember.ComputedProperty} totalHeight
   */
@@ -319,6 +345,29 @@ export default Ember.Mixin.create({
 
     return ((ceil(contentLength / columnCount)) * rowHeight) + bottomPadding;
   },
+
+  /** 
+    @private
+
+    Computes the width for a `Ember.ListView` srollable container div.
+    You must specify `elementWidth` parameter for the width to be computed properly.
+    Either this property or `totalHeight` must be static.
+
+    @property {Ember.ComputedProperty} totalWidth
+  */
+  totalWidth: Ember.computed('content.length', 'elementWidth', function() {
+    var contentLength, totalHeight, rowHeight, elementWidth;
+
+    contentLength = get(this, 'content.length');
+    totalHeight = get(this, 'totalHeight');
+    rowHeight = get(this, 'rowHeight');
+    elementWidth = get(this, 'elementWidth');
+
+    // turn to computed property?
+    var totalRows = ceil(totalHeight / rowHeight);
+
+    return ceil(contentLength / totalRows) * elementWidth;
+  }),
 
   /**
     @private
@@ -378,15 +427,15 @@ export default Ember.Mixin.create({
   },
 
   _singleHeightPosForIndex: function(index) {
-    var elementWidth, width, columnCount, rowHeight, y, x;
+    var elementWidth, width, totalColumnCount, rowHeight, y, x;
 
     elementWidth = get(this, 'elementWidth') || 1;
     width = get(this, 'width') || 1;
-    columnCount = get(this, 'columnCount');
+    totalColumnCount = get(this, 'totalColumnCount');
     rowHeight = get(this, 'rowHeight');
 
-    y = (rowHeight * floor(index/columnCount));
-    x = (index % columnCount) * elementWidth;
+    y = (rowHeight * floor(index/totalColumnCount));
+    x = (index % totalColumnCount) * elementWidth;
 
     return {
       y: y,
@@ -396,13 +445,13 @@ export default Ember.Mixin.create({
 
   // 0 maps to 0, 1 maps to heightForIndex(i)
   _multiHeightPosForIndex: function(index) {
-    var elementWidth, width, columnCount, rowHeight, y, x;
+    var elementWidth, width, totalColumnCount, rowHeight, y, x;
 
     elementWidth = get(this, 'elementWidth') || 1;
     width = get(this, 'width') || 1;
-    columnCount = get(this, 'columnCount');
+    totalColumnCount = get(this, 'totalColumnCount');
 
-    x = (index % columnCount) * elementWidth;
+    x = (index % totalColumnCount) * elementWidth;
     y = this._cachedHeightLookup(index);
 
     return {
@@ -435,7 +484,7 @@ export default Ember.Mixin.create({
   /**
     @private
 
-    Returns a number of columns in the Ember.ListView (for grid layout).
+    Returns a number of visible columns in the Ember.ListView (for grid layout).
 
     If you want to have a multi column layout, you need to specify both
     `width` and `elementWidth`.
@@ -452,12 +501,42 @@ export default Ember.Mixin.create({
     width = get(this, 'width');
 
     if (elementWidth && width > elementWidth) {
-      count = floor(width / elementWidth);
+      count = ceil(width / elementWidth);
     } else {
       count = 1;
     }
 
     return count;
+  }),
+
+  /**
+    @private
+
+    Returns the number of total columns in the Ember.ListView (for grid layout).
+
+    If you want to have a multi column layout, you need to specify both
+    `width` and `elementWidth`.
+
+    If no `elementWidth` is specified, it returns `1`. Otherwise, it will
+    try to fit as many columns as possible for a given `totalWidth`.
+
+    This extends beyond the viewport.
+
+    @property {Ember.ComputedProperty} columnCount
+  */
+  totalColumnCount: Ember.computed('totalWidth', 'elementWidth', function() {
+      var elementWidth, totalWidth, count;
+
+      elementWidth = get(this, 'elementWidth');
+      totalWidth = get(this, 'totalWidth');
+
+      if (elementWidth && totalWidth > elementWidth) {
+        count = floor(totalWidth / elementWidth);
+      } else {
+        count = 1;
+      }
+
+      return count;
   }),
 
   /**
@@ -510,6 +589,23 @@ export default Ember.Mixin.create({
     viewportHeight = get(this, 'height');
 
     return max(0, totalHeight - viewportHeight);
+  }),
+
+  /**
+    @private
+
+    Computes max possible scrollLeft value given the visible viewport
+    and scrollable container div width.
+
+    @property {Ember.ComputedProperty} maxScrollLeft
+  */
+  maxScrollLeft: Ember.computed('width', 'totalWidth', function() {
+    var totalWidth, viewportWidth;
+
+    totalWidth = get(this, 'totalWidth');
+    viewportWidth = get(this, 'width');
+
+    return max(0, totalWidth - viewportWidth);
   }),
 
   /**
@@ -588,7 +684,7 @@ export default Ember.Mixin.create({
     @method _startingIndex
   */
   _startingIndex: function(_contentLength) {
-    var scrollTop, rowHeight, columnCount, calculatedStartingIndex,
+    var scrollTop, scrollLeft, rowHeight, elementWidth, totalColumnCount, calculatedStartingIndex,
         contentLength;
 
     if (_contentLength === undefined) {
@@ -598,13 +694,16 @@ export default Ember.Mixin.create({
     }
 
     scrollTop = this.scrollTop;
+    scrollLeft = this.scrollLeft;
+
     rowHeight = get(this, 'rowHeight');
-    columnCount = get(this, 'columnCount');
+    elementWidth = get(this, 'elementWidth');
+    totalColumnCount = get(this, 'totalColumnCount');
 
     if (this.heightForIndex) {
       calculatedStartingIndex = this._calculatedStartingIndex();
     } else {
-      calculatedStartingIndex = floor(scrollTop / rowHeight) * columnCount;
+      calculatedStartingIndex = floor(scrollTop / rowHeight) * totalColumnCount + (floor(scrollLeft / elementWidth));
     }
 
     var viewsNeededForViewport = this._numChildViewsForViewport();
@@ -617,18 +716,22 @@ export default Ember.Mixin.create({
   _calculatedStartingIndex: function() {
     var rowHeight, paddingCount, columnCount;
     var scrollTop = this.scrollTop;
+    var scrollLeft = this.scrollLeft;
+    var totlColumnCount = get(this, 'totalColumnCount');
+    var elementWIdth = get(this, 'elementWidth');
     var viewportHeight = this.get('height');
     var length = this.get('content.length');
     var heightfromTop = 0;
     var padding = get(this, 'paddingCount');
 
-    for (var i = 0; i < length; i++) {
+    var column = floor(scrollLeft / elementWidth);
+    for (var i = 0; i < length; i += totalColumnCount) {
       if (this._cachedHeightLookup(i + 1) >= scrollTop) {
         break;
       }
     }
 
-    return i;
+    return i + column;
   },
 
   /**

@@ -108,10 +108,17 @@ export default Ember.ContainerView.extend(ListViewMixin, {
 
   applyTransform: ListViewHelper.applyTransform,
 
-  _scrollTo: function(scrollTop) {
+  _scrollTo: function(scrollLeft, scrollTop) {
     var element = get(this, 'element');
 
-    if (element) { element.scrollTop = scrollTop; }
+    if (element) { 
+      if (scrollLeft !== undefined) {
+        element.scrollLeft = scrollLeft;
+      }
+      if (scrollTop !== undefined) {
+        element.scrollTop = scrollTop;
+      }
+    }
   },
 
   didInsertElement: function() {
@@ -119,6 +126,7 @@ export default Ember.ContainerView.extend(ListViewMixin, {
     var element = get(this, 'element');
 
     this._updateScrollableHeight();
+    this._updateScrollableWidth();
 
     this._scroll = function(e) { that.scroll(e); };
 
@@ -134,18 +142,33 @@ export default Ember.ContainerView.extend(ListViewMixin, {
   },
 
   scroll: function(e) {
-    this.scrollTo(e.target.scrollTop);
+    this.scrollTo(e.target.scrollLeft, e.target.scrollTop);
   },
 
-  scrollTo: function(y){
+  scrollToX: function(x) {
+    this._scrollTo(x, undefined);
+    this._scrollContentTo(x, undefined);
+  },
+
+  scrollToY: function(y) {
+    this._scrollTo(undefined, y);
+    this._scrollContentTo(undefined, y);
+  },
+
+  scrollTo: function(x, y){
     var element = get(this, 'element');
-    this._scrollTo(y);
-    this._scrollContentTo(y);
+    console.log("Scroll to ", x, y);
+    this._scrollTo(x, y);
+    this._scrollContentTo(x, y);
   },
 
   totalHeightDidChange: Ember.observer(function () {
     Ember.run.scheduleOnce('afterRender', this, this._updateScrollableHeight);
   }, 'totalHeight'),
+
+  totalWidthDidChange: Ember.observer(function() {
+    Ember.run.scheduleOnce('afterRender', this, this._updateScrollableWidth);
+  }, 'totalWidth'),
 
   _updateScrollableHeight: function () {
     var height, state;
@@ -163,6 +186,26 @@ export default Ember.ContainerView.extend(ListViewMixin, {
 
       this.$('.ember-list-container').css({
         height: height
+      });
+    }
+  },
+
+  _updateScrollableWidth: function () {
+    var width, state;
+
+    // Support old and new Ember versions
+    state = this._state || this.state;
+
+    if (state === 'inDOM') {
+      // if the list is currently displaying the emptyView, remove the height
+      if (this._isChildEmptyView()) {
+          width = '';
+      } else {
+          width = get(this, 'totalWidth');
+      }
+
+      this.$('.ember-list-container').css({
+        width: width
       });
     }
   }
