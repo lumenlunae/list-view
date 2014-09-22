@@ -983,6 +983,7 @@ export default Ember.Mixin.create({
     childViews = this.getReusableChildViews();
     childViewsLength =  childViews.length;
 
+    // startingIndex is accurate relative to content
     startingIndex = this._startingIndex();
     visibleEndingIndex = startingIndex + this._numChildViewsForViewport();
 
@@ -990,12 +991,39 @@ export default Ember.Mixin.create({
 
     contentIndexEnd = min(visibleEndingIndex, startingIndex + childViewsLength);
 
+    
+
     for (contentIndex = startingIndex; contentIndex < contentIndexEnd; contentIndex++) {
       childView = childViews[contentIndex % childViewsLength];
-      this._reuseChildForContentIndex(childView, contentIndex);
+      var mappedContentIndex = this.mappedContentIndexForChildViewIndex(startingIndex, contentIndex);
+      this._reuseChildForContentIndex(childView, mappedContentIndex);
     }
   },
 
+  /** 
+    @private
+
+    // for boundHeight you can't just iterate the indices
+    // in the case of 
+    // 0  1  2  3  4
+    // 5  6  7  8  9
+    // you might only see the viewport for
+    // 1  2  3
+    // 6  7  8
+    // even though the contentIndex array is [1, 2, 3, 4, 5, 6]
+
+    @method contentIndexForChildViewIndex
+  */
+
+  mappedContentIndexForChildViewIndex: function(startingIndex, viewIndex) {
+    var totalColumnCount, columnCount;
+
+    columnCount = get(this, 'columnCount');
+    totalColumnCount = get(this, 'totalColumnCount');
+    var normalIndex = viewIndex - startingIndex;
+    var addRow = Math.floor(normalIndex / columnCount) * totalColumnCount;
+    return (normalIndex % columnCount) + addRow + startingIndex;
+  },
   /**
     @private
     @method getReusableChildViews
