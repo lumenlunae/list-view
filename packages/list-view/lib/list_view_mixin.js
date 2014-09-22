@@ -625,7 +625,7 @@ export default Ember.Mixin.create({
       proposedScrollTop = currentScrollTop * ratio;
       scrollTop = min(maxScrollTop, proposedScrollTop);
 
-      this._scrollTo(scrollTop);
+      this._scrollTo(undefined, scrollTop);
       this.scrollTop = scrollTop;
     }
 
