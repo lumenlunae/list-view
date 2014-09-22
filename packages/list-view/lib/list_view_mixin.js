@@ -633,7 +633,7 @@ export default Ember.Mixin.create({
       // invoked by observer
       Ember.run.schedule('afterRender', this, this._syncListContainerWidth);
     }
-  }, 'columnCount'),
+  }, 'columnCount', 'totalColumnCount'),
 
   /**
     @private
@@ -955,11 +955,11 @@ export default Ember.Mixin.create({
     @method _syncListContainerWidth
    **/
   _syncListContainerWidth: function() {
-    var elementWidth, columnCount, containerWidth, element;
+    var elementWidth, totalColumnCount, containerWidth, element;
 
     elementWidth = get(this, 'elementWidth');
-    columnCount = get(this, 'columnCount');
-    containerWidth = elementWidth * columnCount;
+    totalColumnCount = get(this, 'totalColumnCount');
+    containerWidth = elementWidth * totalColumnCount;
     element = this.$('.ember-list-container');
 
     if (containerWidth && element) {
