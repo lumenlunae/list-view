@@ -163,7 +163,6 @@ export default Ember.ContainerView.extend(ListViewMixin, {
 
   scrollToOffset: function(x, y){
     var element = get(this, 'element');
-    console.log("Scroll to ", x, y);
     this._scrollTo(x, y);
     this._scrollContentToOffset(x, y);
   },
