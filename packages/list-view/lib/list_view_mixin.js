@@ -222,7 +222,17 @@ export default Ember.Mixin.create({
     @private
     @method _scrollContentTo
   */
-  _scrollContentTo: function(x, y) {
+  _scrollContentTo: function(y) {
+    this._scrollContentToOffset(undefined, y);
+
+  },
+
+  /**
+    @private
+    @method _scrollContentToOffset
+  */
+
+  _scrollContentToOffset: function(x, y) {
     var startingIndex, endingIndex,
         contentIndex, visibleEndingIndex, maxContentIndex,
         contentIndexEnd, contentLength, scrollTop, scrollLeft, content;
@@ -277,7 +287,7 @@ export default Ember.Mixin.create({
 
         if (triggerY) {
           this.trigger('scrollYChanged', y);
-        } 
+        }
         if (triggerX) {
           this.trigger('scrollXChanged', x);
         }
@@ -291,22 +301,30 @@ export default Ember.Mixin.create({
           this._lastEndingIndex = endingIndex;
           if (triggerY) {
             this.trigger('scrollYChanged', y);
-          } 
+          }
           if (triggerX) {
             this.trigger('scrollXChanged', x);
           }
         });
       }
     }, this);
-
   },
+
+  /** 
+    @public
+
+    Setting boundHeight will ignore `totalHeight` and allow a variable total width
+
+    @param {Number}
+  */
+  boundHeight: null,
 
   /**
     @private
 
     Computes the height for a `Ember.ListView` scrollable container div.
     You must specify `rowHeight` parameter for the height to be computed properly.
-    Either this property or `totalWidth` must be static.
+    
 
     @property {Ember.ComputedProperty} totalHeight
   */
@@ -314,6 +332,10 @@ export default Ember.Mixin.create({
                               'rowHeight',
                               'columnCount',
                               'bottomPadding', function() {
+    if (this.boundHeight !== null) {
+      return this.boundHeight;
+    }
+
     if (typeof this.heightForIndex === 'function') {
       return this._totalHeightWithHeightForIndex();
     } else {
@@ -348,6 +370,15 @@ export default Ember.Mixin.create({
   },
 
   /** 
+    @public
+
+    Either this property or `boundHeight` must be static to create a boundary for the list or grid.
+
+    @param {Number}
+  */
+  boundWidth: null,
+
+  /** 
     @private
 
     Computes the width for a `Ember.ListView` srollable container div.
@@ -356,8 +387,12 @@ export default Ember.Mixin.create({
 
     @property {Ember.ComputedProperty} totalWidth
   */
-  totalWidth: Ember.computed('content.length', 'elementWidth', function() {
+  totalWidth: Ember.computed('content.length', 'elementWidth', 'boundHeight', 'width', function() {
     var contentLength, totalHeight, rowHeight, elementWidth;
+
+    if (this.boundHeight === null) {
+      return get(this, 'width');
+    }
 
     contentLength = get(this, 'content.length');
     totalHeight = get(this, 'totalHeight');
@@ -495,14 +530,36 @@ export default Ember.Mixin.create({
 
     @property {Ember.ComputedProperty} columnCount
   */
-  columnCount: Ember.computed('width', 'elementWidth', function() {
+  columnCount: Ember.computed('width', 'elementWidth', 'totalWidth', function() {
     var elementWidth, width, count;
 
     elementWidth = get(this, 'elementWidth');
     width = get(this, 'width');
 
     if (elementWidth && width > elementWidth) {
-      count = ceil(width / elementWidth);
+      // check the total column count
+      var totalWidth = get(this, 'totalWidth');
+      var totalCount;
+
+      // use ceil for boundHeight lists because we want to push out as 
+      // far as we can, versus when we go vertical we don't.
+      if (this.boundHeight !== null) {
+        totalCount = ceil(totalWidth / elementWidth);
+        count = ceil(width / elementWidth);
+      }  else {
+        totalCount = floor(totalWidth / elementWidth);
+        count = floor(width / elementWidth);
+      }
+
+      
+      if (count < totalCount) {
+        // only apply this when height is bound to avoid
+        // any backward incompatiblity
+        // include a buffer column so there won't be empty space when scrolling
+        if (this.boundHeight !== null) {
+          count += 1;
+        }
+      }
     } else {
       count = 1;
     }
@@ -698,13 +755,23 @@ export default Ember.Mixin.create({
     scrollLeft = this.scrollLeft;
 
     rowHeight = get(this, 'rowHeight');
-    elementWidth = get(this, 'elementWidth');
+    
     totalColumnCount = get(this, 'totalColumnCount');
+    if (totalColumnCount === 1) {
+      elementWidth = get(this, 'width');
+    } else {
+      elementWidth = get(this, 'elementWidth');
+    }
 
     if (this.heightForIndex) {
       calculatedStartingIndex = this._calculatedStartingIndex();
     } else {
-      calculatedStartingIndex = floor(scrollTop / rowHeight) * totalColumnCount + (floor(scrollLeft / elementWidth));
+      // in the case of just a list
+      if (elementWidth === undefined) {
+        calculatedStartingIndex = floor(scrollTop / rowHeight) * totalColumnCount;
+      } else {
+        calculatedStartingIndex = floor(scrollTop / rowHeight) * totalColumnCount + (floor(scrollLeft / elementWidth));
+      }
     }
 
     var viewsNeededForViewport = this._numChildViewsForViewport();
@@ -715,11 +782,15 @@ export default Ember.Mixin.create({
   },
 
   _calculatedStartingIndex: function() {
-    var rowHeight, paddingCount, columnCount;
+    var rowHeight, paddingCount, columnCount, elementWidth;
     var scrollTop = this.scrollTop;
     var scrollLeft = this.scrollLeft;
-    var totlColumnCount = get(this, 'totalColumnCount');
-    var elementWIdth = get(this, 'elementWidth');
+    var totalColumnCount = get(this, 'totalColumnCount');
+    if (totalColumnCount === 1) {
+      elementWidth = get(this, 'width');
+    } else {
+      elementWidth = get(this, 'elementWidth');
+    }
     var viewportHeight = this.get('height');
     var length = this.get('content.length');
     var heightfromTop = 0;
