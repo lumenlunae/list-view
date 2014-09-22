@@ -142,24 +142,30 @@ export default Ember.ContainerView.extend(ListViewMixin, {
   },
 
   scroll: function(e) {
-    this.scrollTo(e.target.scrollLeft, e.target.scrollTop);
+    this.scrollToOffset(e.target.scrollLeft, e.target.scrollTop);
   },
 
   scrollToX: function(x) {
     this._scrollTo(x, undefined);
-    this._scrollContentTo(x, undefined);
+    this._scrollContentToOffset(x, undefined);
   },
 
   scrollToY: function(y) {
     this._scrollTo(undefined, y);
-    this._scrollContentTo(undefined, y);
+    this._scrollContentTo(y);
   },
 
-  scrollTo: function(x, y){
+  scrollTo: function(y){
+    var element = get(this, 'element');
+    this._scrollTo(undefined, y);
+    this._scrollContentTo(y);
+  },
+
+  scrollToOffset: function(x, y){
     var element = get(this, 'element');
     console.log("Scroll to ", x, y);
     this._scrollTo(x, y);
-    this._scrollContentTo(x, y);
+    this._scrollContentToOffset(x, y);
   },
 
   totalHeightDidChange: Ember.observer(function () {
